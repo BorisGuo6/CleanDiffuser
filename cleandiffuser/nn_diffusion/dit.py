@@ -29,9 +29,12 @@ class DiTBlock(nn.Module):
             nn.SiLU(), nn.Linear(hidden_size, hidden_size * 6))
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
+        # decode from condition
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(t).chunk(6, dim=1)
+        # multi-head self-attention part
         x = modulate(self.norm1(x), shift_msa, scale_msa)
         x = x + gate_msa.unsqueeze(1) * self.attn(x, x, x)[0]
+        # point-wise feedforward part
         x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
@@ -45,6 +48,7 @@ class FinalLayer1d(nn.Module):
             nn.SiLU(), nn.Linear(hidden_size, 2 * hidden_size))
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
+        # same process as dit block with linear layer
         shift, scale = self.adaLN_modulation(t).chunk(2, dim=1)
         x = modulate(self.norm_final(x), shift, scale)
         return self.linear(x)
@@ -115,10 +119,13 @@ class DiT1d(BaseNNDiffusion):
         Output:
             y:          (b, horizon, in_dim)
         """
+        # positional embedding
         if self.pos_emb_cache is None or self.pos_emb_cache.shape[0] != x.shape[1]:
             self.pos_emb_cache = self.pos_emb(torch.arange(x.shape[1], device=x.device))
-
+        # x_proj(x): noised latent
+        # patchify
         x = self.x_proj(x) + self.pos_emb_cache[None,]
+        # embed noise and condition
         emb = self.map_noise(noise)
         if condition is not None:
             emb = emb + condition

@@ -11,7 +11,7 @@ action_dim: 9
 obs_steps: 2
 action_steps: 8
 # train
-device: cuda:0
+device: cuda
 seed: 0
 gradient_steps: 1000000
 batch_size: 256
